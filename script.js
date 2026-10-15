@@ -1,118 +1,216 @@
-// BugFix Agent - script.js
-// Frontend-only behavior. No backend or API calls yet.
+// BugFix Agent frontend. All text from the server is inserted with textContent
+// (via the el() helper), never innerHTML, so repository content cannot inject markup.
 
-const form = document.getElementById("repo-form");
-const input = document.getElementById("repo-url");
-const analyzeBtn = document.getElementById("analyze-btn");
-const message = document.getElementById("repo-msg");
-const repoName = document.getElementById("repo-name");
-const downloadBtn = document.getElementById("download-btn");
+const $ = (sel) => document.querySelector(sel);
+const state = { analysis: null, severity: "all", query: "" };
+const SEVERITIES = ["high", "medium", "low", "info"];
 
-// Matches https://github.com/owner/repo (optional .git or trailing slash)
-const GITHUB_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
-
-// Show a status message under the input
-function showMessage(text, isError = false) {
-  message.textContent = text;
-  message.classList.toggle("form-msg--error", isError);
+/** Small DOM helper: el("div", {class: "x"}, "text", childNode) */
+function el(tag, props = {}, ...kids) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") node.className = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  kids.flat().forEach((c) => node.append(c instanceof Node ? c : document.createTextNode(c ?? "")));
+  return node;
 }
 
-// Analyze Repository: validate, show loading state, update repo name
-form.addEventListener("submit", (event) => {
-  // Build one bug card from a finding (textContent keeps repo data from injecting HTML)
-function bugCard(issue) {
-  const card = document.createElement("article");
-  card.className = `card bug bug--${issue.severity}`;
+async function api(path, body) {
+  const opts = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
+  let res;
+  try { res = await fetch(path, opts); }
+  catch { throw new Error("Cannot reach the BugFix Agent server. Is app.py running?"); }
+  let data = {};
+  try { data = await res.json(); } catch { /* non-JSON response */ }
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
 
-  const top = document.createElement("div");
-  top.className = "bug__top";
-  const sev = document.createElement("span");
-  sev.className = `severity severity--${issue.severity}`;
-  sev.textContent = issue.severity[0].toUpperCase() + issue.severity.slice(1);
-  const loc = document.createElement("span");
-  loc.className = "bug__loc";
-  loc.textContent = `${issue.file} line ${issue.line}`;
-  top.append(sev, loc);
+function showState(kind, message) {
+  const box = $("#state-box");
+  box.className = "state-box" + (kind === "error" ? " error" : "");
+  box.replaceChildren(kind === "loading" ? el("span", { class: "spinner" }) : "", message);
+  box.hidden = false;
+}
+const hideState = () => { $("#state-box").hidden = true; };
 
-  const title = document.createElement("h3");
-  title.textContent = issue.title;
+// ---------- Status pills ----------
+async function loadStatus() {
+  try {
+    const s = await api("/api/status");
+    const ai = $("#ai-status"), sb = $("#sandbox-status");
+    ai.textContent = s.ai.configured ? `AI: ${s.ai.model}` : "AI: not configured";
+    ai.className = "pill " + (s.ai.configured ? "ok" : "off");
+    sb.textContent = s.sandbox.available ? "Sandbox: Docker ready" : "Sandbox: unavailable";
+    sb.className = "pill " + (s.sandbox.available ? "ok" : "off");
+    sb.title = s.sandbox.message || "";
+    const notice = $("#ai-notice");
+    notice.hidden = s.ai.configured;
+    notice.textContent = s.ai.message || "";
+  } catch (e) {
+    $("#ai-status").textContent = "Server offline";
+  }
+}
 
-  const fix = document.createElement("div");
-  fix.className = "fix";
-  const fixTitle = document.createElement("p");
-  fixTitle.className = "fix__title";
-  fixTitle.textContent = "Suggested fix";
-  const fixText = document.createElement("p");
-  fixText.textContent = issue.fix;
-  fix.append(fixTitle, fixText);
+// ---------- Analyze ----------
+$("#analyze-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = $("#analyze-btn");
+  btn.disabled = true;
+  $("#results").hidden = true;
+  showState("loading", "Fetching repository and running static analysis\u2026");
+  try {
+    state.analysis = await api("/api/analyze", { url: $("#repo-url").value });
+    state.severity = "all"; state.query = ""; $("#search").value = "";
+    $("#verify-output").replaceChildren();
+    hideState();
+    renderAll();
+    $("#results").hidden = false;
+  } catch (e) {
+    showState("error", e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
-  card.append(top, title, fix);
+// ---------- Rendering ----------
+function renderAll() {
+  renderRepo();
+  renderFilters();
+  renderFindings();
+  const id = state.analysis.id;
+  $("#dl-md").href = `/api/report/${id}/md`;
+  $("#dl-json").href = `/api/report/${id}/json`;
+}
+
+function renderRepo() {
+  const a = state.analysis, r = a.repo;
+  const counts = SEVERITIES.map((s) => a.findings.filter((f) => f.severity === s).length);
+  const langs = Object.keys(r.languages).slice(0, 5).join(", ") || "unknown";
+  const stat = (v, label) => el("div", {}, el("b", {}, String(v ?? "-")), el("span", {}, label));
+  $("#repo-card").replaceChildren(
+    el("div", { class: "repo-head" },
+      el("div", {}, el("h2", {}, `${r.owner}/${r.name}`), el("p", { class: "muted" }, r.description || "No description provided.")),
+      el("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, "View on GitHub")),
+    el("div", { class: "meta-grid" },
+      stat(a.files_scanned.length, "files scanned"), stat(a.findings.length, "findings"),
+      stat(counts[0], "high"), stat(r.stars, "stars"), stat(r.license || "none", "license"),
+      stat(r.branch, "default branch"), stat(langs, "top languages")),
+    a.notes.length ? el("ul", { class: "note-list" }, a.notes.map((n) => el("li", {}, n))) : "");
+}
+
+function renderFilters() {
+  const a = state.analysis, box = $("#severity-filters");
+  const mk = (key, label, n) => el("button", {
+    class: "chip", type: "button", "aria-pressed": String(state.severity === key),
+    onclick: () => { state.severity = key; renderFilters(); renderFindings(); },
+  }, `${label} (${n})`);
+  box.replaceChildren(mk("all", "All", a.findings.length),
+    ...SEVERITIES.map((s) => mk(s, s[0].toUpperCase() + s.slice(1), a.findings.filter((f) => f.severity === s).length)));
+}
+$("#search").addEventListener("input", (e) => { state.query = e.target.value.toLowerCase(); renderFindings(); });
+
+function renderFindings() {
+  const a = state.analysis, list = $("#findings-list");
+  const shown = a.findings.filter((f) =>
+    (state.severity === "all" || f.severity === state.severity) &&
+    (f.file + " " + f.title).toLowerCase().includes(state.query));
+  if (!a.findings.length) {
+    const msg = a.files_scanned.length
+      ? "No issues matched the built-in rules in the scanned files. This does not prove the code is bug-free."
+      : "No supported source files were found, so nothing could be analyzed.";
+    return list.replaceChildren(el("div", { class: "empty" }, msg));
+  }
+  if (!shown.length) return list.replaceChildren(el("div", { class: "empty" }, "No findings match the current filter."));
+  list.replaceChildren(...shown.map(findingCard));
+}
+
+function findingCard(f) {
+  const a = state.analysis;
+  const open = state.openIds && state.openIds.has(f.id);
+  const aiHolder = el("div", { class: "block" });
+  const card = el("details", { class: "finding", open: open ? "" : null, ontoggle: (e) => {
+      state.openIds = state.openIds || new Set();
+      e.target.open ? state.openIds.add(f.id) : state.openIds.delete(f.id);
+    } },
+    el("summary", {}, el("span", { class: `sev sev-${f.severity}` }, f.severity), el("span", { class: "f-title" }, f.title),
+      el("span", { class: "f-loc" }, f.file + (f.line ? `:${f.line}` : ""))),
+    el("div", { class: "f-body" },
+      el("div", { class: "block" }, el("h4", {}, el("span", { class: "tag tag-evidence" }, "Evidence"), `Rule ${f.rule}`),
+        f.evidence ? el("pre", {}, f.evidence) : el("p", { class: "muted small" }, "No line number available."),
+        el("p", { class: "small" }, f.explanation)),
+      aiHolder));
+  renderAiBlock(aiHolder, f);
   return card;
 }
 
-// Analyze Repository: call the backend and fill in the dashboard
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const url = input.value.trim();
-  if (!GITHUB_URL.test(url)) {
-    showMessage("Enter a valid URL, like https://github.com/owner/repository", true);
-    input.focus();
-    return;
+function renderAiBlock(holder, f) {
+  const a = state.analysis, fix = a.fixes && a.fixes[f.id];
+  const head = el("h4", {}, el("span", { class: "tag tag-ai" }, "AI recommendation"));
+  if (!fix) {
+    const msg = el("p", { class: "err" });
+    const btn = el("button", { class: "btn small", type: "button", onclick: async () => {
+      btn.disabled = true; btn.textContent = "Asking model\u2026"; msg.textContent = "";
+      try {
+        a.fixes = a.fixes || {};
+        a.fixes[f.id] = await api("/api/fix", { analysis_id: a.id, finding_id: f.id });
+        renderAiBlock(holder, f);
+      } catch (e) { msg.textContent = e.message; btn.disabled = false; btn.textContent = "Ask AI for a fix"; }
+    } }, "Ask AI for a fix");
+    return holder.replaceChildren(head, el("p", { class: "muted small" }, "No recommendation requested yet."), btn, msg);
   }
+  a.decisions = a.decisions || {};
+  const decision = a.decisions[f.id] || "pending";
+  const setDecision = async (d) => {
+    try { await api("/api/decision", { analysis_id: a.id, finding_id: f.id, decision: d }); a.decisions[f.id] = d; renderAiBlock(holder, f); }
+    catch (e) { alert(e.message); }
+  };
+  holder.replaceChildren(head,
+    el("p", { class: "small" }, fix.explanation),
+    el("p", { class: "muted small" }, `Model: ${fix.model} \u00b7 confidence: ${fix.confidence}`),
+    el("pre", { class: "del" }, fix.original_snippet || "(none)"),
+    el("pre", { class: "add" }, fix.fixed_snippet || "(none)"),
+    fix.caveats ? el("p", { class: "small muted" }, "Caveats: " + fix.caveats) : "",
+    fix.snippet_matches_file ? "" : el("p", { class: "warn" }, "The quoted original text was not found exactly once in the file, so this fix cannot be applied for testing. Review it manually."),
+    el("div", { class: "decision" },
+      el("button", { class: "btn small", type: "button", disabled: decision === "accepted" ? "" : null, onclick: () => setDecision("accepted") }, "Accept for testing"),
+      el("button", { class: "btn small", type: "button", disabled: decision === "rejected" ? "" : null, onclick: () => setDecision("rejected") }, "Reject"),
+      el("span", { class: "badge-decision" }, `Decision: ${decision}. Nothing is changed in your repository.`)));
+}
 
-  analyzeBtn.disabled = true;
-  analyzeBtn.textContent = "Analyzing...";
-  showMessage("Scanning repository...");
-
+// ---------- Verification ----------
+$("#verify-btn").addEventListener("click", async () => {
+  const btn = $("#verify-btn"), out = $("#verify-output");
+  btn.disabled = true;
+  out.replaceChildren(el("p", { class: "muted small" }, el("span", { class: "spinner" }), "Downloading repo and running tests (can take a few minutes)\u2026"));
   try {
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Analysis failed.");
-
-    repoName.textContent = data.name;
-    document.getElementById("files-scanned").textContent = data.files_scanned;
-    document.getElementById("files-note").textContent =
-      `Python files, of ${data.total_files} total`;
-    document.getElementById("issues-found").textContent = data.issues.length;
-
-    const counts = { critical: 0, high: 0, medium: 0 };
-    data.issues.forEach((i) => counts[i.severity]++);
-    document.getElementById("issues-note").textContent =
-      `${counts.critical} critical, ${counts.high} high, ${counts.medium} medium`;
-
-    const grid = document.getElementById("findings-grid");
-    grid.replaceChildren(...data.issues.map(bugCard));
-    if (data.issues.length === 0) grid.textContent = "No issues found by the current rules.";
-
-    showMessage(`Scan complete for ${data.name}.`);
-  } catch (err) {
-    showMessage(err.message, true);
-  } finally {
-    analyzeBtn.disabled = false;
-    analyzeBtn.textContent = "Analyze Repository";
-  }
-});
+    const v = await api("/api/verify", { analysis_id: state.analysis.id });
+    state.analysis.verification = v;
+    renderVerification(v);
+  } catch (e) {
+    out.replaceChildren(el("p", { class: "err" }, e.message));
+  } finally { btn.disabled = false; }
 });
 
-// Download Report: saves a sample text file
-downloadBtn.addEventListener("click", () => {
-  const report = [
-    "Dependency Exit Capsule (sample data)",
-    `Repository: ${repoName.textContent}`,
-    "Files scanned: 128",
-    "Issues found: 7 (1 critical, 2 high, 4 medium)",
-    "Tests passing after fixes: 42 / 45",
-  ].join("\n");
+function renderRun(title, run) {
+  return el("div", { class: "run" },
+    el("div", {}, el("span", { class: "tag tag-test" }, "Test result"), " ", title, ": ",
+      el("span", { class: `run-status st-${run.status}` }, run.status.replace("_", " ")), ` (${run.suite}, ${run.seconds}s)`),
+    el("pre", {}, run.output || "(no output)"));
+}
 
-  const blob = new Blob([report], { type: "text/plain" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "dependency-exit-capsule.txt";
-  link.click();
-  URL.revokeObjectURL(link.href);
-});
+function renderVerification(v) {
+  const out = $("#verify-output");
+  const parts = [el("p", { class: "muted small" }, `Isolation: ${v.isolation}`)];
+  v.reasons.forEach((r) => parts.push(el("p", { class: "warn" }, r)));
+  if (!v.executed) parts.unshift(el("p", { class: "warn" }, "No tests were executed."));
+  v.baseline.forEach((r) => parts.push(renderRun("Unmodified repo", r)));
+  v.with_fixes.forEach((r) => parts.push(renderRun(`With fixes ${v.applied_fixes.join(", ")}`, r)));
+  v.skipped_fixes.forEach((s) => parts.push(el("p", { class: "warn" }, `${s.finding_id} not applied: ${s.reason}`)));
+  out.replaceChildren(...parts);
+}
+
+loadStatus();
