@@ -2,7 +2,7 @@
 // (via the el() helper), never innerHTML, so repository content cannot inject markup.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { analysis: null, severity: "all", query: "" };
+const state = { analysis: null, severity: "all", query: "", openIds: new Set() };
 const SEVERITIES = ["high", "medium", "low", "info"];
 
 /** Small DOM helper: el("div", {class: "x"}, "text", childNode) */
@@ -18,14 +18,24 @@ function el(tag, props = {}, ...kids) {
   return node;
 }
 
+/** Calls the Flask backend. GET when no body is given, POST (JSON) otherwise. */
 async function api(path, body) {
   const opts = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
   let res;
-  try { res = await fetch(path, opts); }
-  catch { throw new Error("Cannot reach the BugFix Agent server. Is app.py running?"); }
+  try {
+    res = await fetch(path, opts);
+  } catch {
+    throw new Error("Cannot reach the BugFix Agent server. Is app.py running?");
+  }
   let data = {};
   try { data = await res.json(); } catch { /* non-JSON response */ }
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    // Flask always returns JSON errors. A bare 404 means a different server answered.
+    if (res.status === 404 && !data.error) {
+      throw new Error("API not found. Open the app at http://127.0.0.1:5000 after running `py app.py`, not through Live Server or a file.");
+    }
+    throw new Error(data.error || `Request failed (${res.status})`);
+  }
   return data;
 }
 
@@ -64,7 +74,10 @@ $("#analyze-form").addEventListener("submit", async (ev) => {
   showState("loading", "Fetching repository and running static analysis\u2026");
   try {
     state.analysis = await api("/api/analyze", { url: $("#repo-url").value });
-    state.severity = "all"; state.query = ""; $("#search").value = "";
+    state.severity = "all";
+    state.query = "";
+    state.openIds = new Set();
+    $("#search").value = "";
     $("#verify-output").replaceChildren();
     hideState();
     renderAll();
@@ -108,10 +121,15 @@ function renderFilters() {
     class: "chip", type: "button", "aria-pressed": String(state.severity === key),
     onclick: () => { state.severity = key; renderFilters(); renderFindings(); },
   }, `${label} (${n})`);
-  box.replaceChildren(mk("all", "All", a.findings.length),
+  box.replaceChildren(
+    mk("all", "All", a.findings.length),
     ...SEVERITIES.map((s) => mk(s, s[0].toUpperCase() + s.slice(1), a.findings.filter((f) => f.severity === s).length)));
 }
-$("#search").addEventListener("input", (e) => { state.query = e.target.value.toLowerCase(); renderFindings(); });
+
+$("#search").addEventListener("input", (e) => {
+  state.query = e.target.value.toLowerCase();
+  renderFindings();
+});
 
 function renderFindings() {
   const a = state.analysis, list = $("#findings-list");
@@ -129,17 +147,20 @@ function renderFindings() {
 }
 
 function findingCard(f) {
-  const a = state.analysis;
-  const open = state.openIds && state.openIds.has(f.id);
   const aiHolder = el("div", { class: "block" });
-  const card = el("details", { class: "finding", open: open ? "" : null, ontoggle: (e) => {
-      state.openIds = state.openIds || new Set();
-      e.target.open ? state.openIds.add(f.id) : state.openIds.delete(f.id);
-    } },
-    el("summary", {}, el("span", { class: `sev sev-${f.severity}` }, f.severity), el("span", { class: "f-title" }, f.title),
+  const card = el("details", {
+      class: "finding",
+      open: state.openIds.has(f.id) ? "" : null,
+      // Remember which cards are open so filtering/re-rendering keeps them open.
+      ontoggle: (e) => { e.target.open ? state.openIds.add(f.id) : state.openIds.delete(f.id); },
+    },
+    el("summary", {},
+      el("span", { class: `sev sev-${f.severity}` }, f.severity),
+      el("span", { class: "f-title" }, f.title),
       el("span", { class: "f-loc" }, f.file + (f.line ? `:${f.line}` : ""))),
     el("div", { class: "f-body" },
-      el("div", { class: "block" }, el("h4", {}, el("span", { class: "tag tag-evidence" }, "Evidence"), `Rule ${f.rule}`),
+      el("div", { class: "block" },
+        el("h4", {}, el("span", { class: "tag tag-evidence" }, "Evidence"), `Rule ${f.rule}`),
         f.evidence ? el("pre", {}, f.evidence) : el("p", { class: "muted small" }, "No line number available."),
         el("p", { class: "small" }, f.explanation)),
       aiHolder));
@@ -148,33 +169,53 @@ function findingCard(f) {
 }
 
 function renderAiBlock(holder, f) {
-  const a = state.analysis, fix = a.fixes && a.fixes[f.id];
+  const a = state.analysis;
+  a.fixes = a.fixes || {};
+  a.decisions = a.decisions || {};
+  const fix = a.fixes[f.id];
   const head = el("h4", {}, el("span", { class: "tag tag-ai" }, "AI recommendation"));
+
+  // No recommendation yet: show a button that asks the backend (and so the model).
   if (!fix) {
     const msg = el("p", { class: "err" });
-    const btn = el("button", { class: "btn small", type: "button", onclick: async () => {
-      btn.disabled = true; btn.textContent = "Asking model\u2026"; msg.textContent = "";
-      try {
-        a.fixes = a.fixes || {};
-        a.fixes[f.id] = await api("/api/fix", { analysis_id: a.id, finding_id: f.id });
-        renderAiBlock(holder, f);
-      } catch (e) { msg.textContent = e.message; btn.disabled = false; btn.textContent = "Ask AI for a fix"; }
-    } }, "Ask AI for a fix");
+    const btn = el("button", {
+      class: "btn small", type: "button",
+      onclick: async () => {
+        btn.disabled = true;
+        btn.textContent = "Asking model\u2026";
+        msg.textContent = "";
+        try {
+          a.fixes[f.id] = await api("/api/fix", { analysis_id: a.id, finding_id: f.id });
+          renderAiBlock(holder, f);
+        } catch (e) {
+          msg.textContent = e.message;
+          btn.disabled = false;
+          btn.textContent = "Ask AI for a fix";
+        }
+      },
+    }, "Ask AI for a fix");
     return holder.replaceChildren(head, el("p", { class: "muted small" }, "No recommendation requested yet."), btn, msg);
   }
-  a.decisions = a.decisions || {};
+
   const decision = a.decisions[f.id] || "pending";
   const setDecision = async (d) => {
-    try { await api("/api/decision", { analysis_id: a.id, finding_id: f.id, decision: d }); a.decisions[f.id] = d; renderAiBlock(holder, f); }
-    catch (e) { alert(e.message); }
+    try {
+      await api("/api/decision", { analysis_id: a.id, finding_id: f.id, decision: d });
+      a.decisions[f.id] = d;
+      renderAiBlock(holder, f);
+    } catch (e) {
+      alert(e.message);
+    }
   };
+
   holder.replaceChildren(head,
     el("p", { class: "small" }, fix.explanation),
     el("p", { class: "muted small" }, `Model: ${fix.model} \u00b7 confidence: ${fix.confidence}`),
     el("pre", { class: "del" }, fix.original_snippet || "(none)"),
     el("pre", { class: "add" }, fix.fixed_snippet || "(none)"),
     fix.caveats ? el("p", { class: "small muted" }, "Caveats: " + fix.caveats) : "",
-    fix.snippet_matches_file ? "" : el("p", { class: "warn" }, "The quoted original text was not found exactly once in the file, so this fix cannot be applied for testing. Review it manually."),
+    fix.snippet_matches_file ? "" : el("p", { class: "warn" },
+      "The quoted original text was not found exactly once in the file, so this fix cannot be applied for testing. Review it manually."),
     el("div", { class: "decision" },
       el("button", { class: "btn small", type: "button", disabled: decision === "accepted" ? "" : null, onclick: () => setDecision("accepted") }, "Accept for testing"),
       el("button", { class: "btn small", type: "button", disabled: decision === "rejected" ? "" : null, onclick: () => setDecision("rejected") }, "Reject"),
@@ -185,20 +226,25 @@ function renderAiBlock(holder, f) {
 $("#verify-btn").addEventListener("click", async () => {
   const btn = $("#verify-btn"), out = $("#verify-output");
   btn.disabled = true;
-  out.replaceChildren(el("p", { class: "muted small" }, el("span", { class: "spinner" }), "Downloading repo and running tests (can take a few minutes)\u2026"));
+  out.replaceChildren(el("p", { class: "muted small" },
+    el("span", { class: "spinner" }), "Downloading repo and running tests (can take a few minutes)\u2026"));
   try {
     const v = await api("/api/verify", { analysis_id: state.analysis.id });
     state.analysis.verification = v;
     renderVerification(v);
   } catch (e) {
     out.replaceChildren(el("p", { class: "err" }, e.message));
-  } finally { btn.disabled = false; }
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 function renderRun(title, run) {
   return el("div", { class: "run" },
-    el("div", {}, el("span", { class: "tag tag-test" }, "Test result"), " ", title, ": ",
-      el("span", { class: `run-status st-${run.status}` }, run.status.replace("_", " ")), ` (${run.suite}, ${run.seconds}s)`),
+    el("div", {},
+      el("span", { class: "tag tag-test" }, "Test result"), " ", title, ": ",
+      el("span", { class: `run-status st-${run.status}` }, run.status.replace("_", " ")),
+      ` (${run.suite}, ${run.seconds}s)`),
     el("pre", {}, run.output || "(no output)"));
 }
 
