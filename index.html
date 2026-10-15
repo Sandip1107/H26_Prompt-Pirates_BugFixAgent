@@ -67,3 +67,153 @@
     <!-- ============ REPOSITORY OVERVIEW ============ -->
     <section class="section" id="overview">
       <div class="container">
+        <div class="section__head">
+          <h2>Repository overview</h2>
+          <span class="badge badge--sample">Sample data</span>
+        </div>
+        <div class="grid grid--3">
+          <article class="card stat">
+            <p class="stat__label">Repository</p>
+            <p class="stat__value stat__value--text">acme/inventory-api</p>
+            <p class="stat__note">Python, 3 contributors</p>
+          </article>
+          <article class="card stat">
+            <p class="stat__label">Files scanned</p>
+            <p class="stat__value">128</p>
+            <p class="stat__note">of 131 files in the repository</p>
+          </article>
+          <article class="card stat">
+            <p class="stat__label">Issues found</p>
+            <p class="stat__value stat__value--warn">7</p>
+            <p class="stat__note">1 critical, 2 high, 4 medium</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BUG FINDINGS ============ -->
+    <section class="section" id="findings">
+      <div class="container">
+        <div class="section__head">
+          <h2>Bug findings</h2>
+          <span class="badge badge--sample">Sample data</span>
+        </div>
+        <div class="grid grid--3">
+
+          <article class="card bug bug--critical">
+            <div class="bug__top">
+              <span class="severity severity--critical">Critical</span>
+              <span class="bug__loc"><code>utils/auth.py</code> line 42</span>
+            </div>
+            <h3>SQL injection in user lookup</h3>
+            <p>User input is joined directly into a SQL string, so an attacker could read or change database records.</p>
+            <div class="fix">
+              <p class="fix__title">Suggested fix</p>
+              <p>Use a parameterized query: <code>cursor.execute(query, (user_id,))</code>.</p>
+            </div>
+          </article>
+
+          <article class="card bug bug--high">
+            <div class="bug__top">
+              <span class="severity severity--high">High</span>
+              <span class="bug__loc"><code>services/orders.py</code> line 118</span>
+            </div>
+            <h3>Possible division by zero</h3>
+            <p>The average order value is calculated without checking whether the order count is zero.</p>
+            <div class="fix">
+              <p class="fix__title">Suggested fix</p>
+              <p>Return <code>0</code> early when <code>order_count == 0</code>.</p>
+            </div>
+          </article>
+
+          <article class="card bug bug--medium">
+            <div class="bug__top">
+              <span class="severity severity--medium">Medium</span>
+              <span class="bug__loc"><code>api/routes.py</code> line 76</span>
+            </div>
+            <h3>File handle never closed</h3>
+            <p>The export route opens a file without closing it, which can leak resources under heavy use.</p>
+            <div class="fix">
+              <p class="fix__title">Suggested fix</p>
+              <p>Wrap the call in <code>with open(...) as f:</code>.</p>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ AI RECOMMENDATIONS ============ -->
+    <section class="section" id="recommendations">
+      <div class="container">
+        <div class="section__head">
+          <h2>AI recommendations</h2>
+          <span class="badge badge--sample">Sample data</span>
+        </div>
+        <ul class="reco-list">
+          <li class="card reco">
+            <h3>Upgrade an outdated dependency</h3>
+            <p><code>requests 2.19</code> has known security advisories. Upgrading to <code>2.32</code> needs no code changes.</p>
+          </li>
+          <li class="card reco">
+            <h3>Split a long function</h3>
+            <p><code>process_order()</code> is 140 lines long. Moving payment and stock logic into helpers will make it easier to test.</p>
+          </li>
+          <li class="card reco">
+            <h3>Add tests for error handling</h3>
+            <p>No tests cover failed database connections in <code>services/</code>. Adding two or three would catch regressions early.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ VERIFICATION RESULTS ============ -->
+    <section class="section" id="verification">
+      <div class="container">
+        <div class="section__head">
+          <h2>Verification results</h2>
+          <span class="badge badge--sample">Sample data</span>
+        </div>
+        <div class="card verify">
+          <div class="verify__summary">
+            <p class="verify__big">42 / 45</p>
+            <p class="verify__sub">tests passing after suggested fixes</p>
+          </div>
+          <div class="progress" role="img" aria-label="42 of 45 tests passing">
+            <span class="progress__pass"></span>
+            <span class="progress__fail"></span>
+          </div>
+          <ul class="verify__list">
+            <li><span class="status status--pass">Passed</span> Unit tests (38 of 38)</li>
+            <li><span class="status status--pass">Passed</span> Lint checks (4 of 4)</li>
+            <li><span class="status status--fail">Failed</span> Integration tests (0 of 3)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DOWNLOAD REPORT ============ -->
+    <section class="section section--last" id="report">
+      <div class="container">
+        <div class="card report">
+          <div>
+            <h2>Dependency Exit Capsule</h2>
+            <p>A single report with findings, fixes, and verification results, ready to share with your team.</p>
+          </div>
+          <!-- Visual only for now -->
+          <button type="button" class="btn btn--primary">Download Report</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="container">
+      <p>BugFix Agent &middot; Hackathon prototype &middot; All data shown is sample data.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
