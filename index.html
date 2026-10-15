@@ -1,3 +1,69 @@
-<h1>My First Hackathon Project</h1>
-<p>Built at my first hackathon!</p>
-<p>My feature branch is working!</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BugFix Agent | Find Bugs. Fix Smarter.</title>
+  <!-- All styling lives in style.css (same folder as this file) -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============ NAVBAR ============ -->
+  <header class="navbar">
+    <div class="container navbar__inner">
+      <a href="#top" class="logo" aria-label="BugFix Agent home">
+        <span class="logo__mark" aria-hidden="true">&lt;/&gt;</span>
+        <span class="logo__text">BugFix Agent</span>
+      </a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="#analyze">Analyze</a>
+        <a href="#findings">Findings</a>
+        <a href="#recommendations">Recommendations</a>
+        <a href="#verification">Verification</a>
+        <a href="#report">Report</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ============ HERO + REPOSITORY INPUT ============ -->
+    <section class="hero" id="analyze">
+      <div class="container hero__inner">
+        <div class="hero__copy">
+          <h1>Find Bugs. Fix Smarter.</h1>
+          <p class="hero__lead">
+            BugFix Agent scans your GitHub repository, points out risky code,
+            suggests fixes, and checks them with tests, so maintenance stops
+            being guesswork.
+          </p>
+
+          <!-- Repository input (visual only, no functionality yet) -->
+          <form class="repo-form" onsubmit="return false;">
+            <label for="repo-url" class="repo-form__label">GitHub repository URL</label>
+            <div class="repo-form__row">
+              <input id="repo-url" type="text" placeholder="https://github.com/owner/repository">
+              <button type="button" class="btn btn--primary">Analyze Repository</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Decorative code-diff preview (sample data) -->
+        <div class="diff" aria-hidden="true">
+          <div class="diff__bar">
+            <span class="dot dot--red"></span><span class="dot dot--amber"></span><span class="dot dot--green"></span>
+            <span class="diff__file">utils/auth.py</span>
+          </div>
+          <pre class="diff__code"><span class="ln">41</span>  def get_user(user_id):
+<span class="ln del">42</span>-     query = "SELECT * FROM users WHERE id=" + user_id
+<span class="ln add">42</span>+     query = "SELECT * FROM users WHERE id = %s"
+<span class="ln add">43</span>+     cursor.execute(query, (user_id,))
+<span class="ln">44</span>      return cursor.fetchone()</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ REPOSITORY OVERVIEW ============ -->
+    <section class="section" id="overview">
+      <div class="container">
