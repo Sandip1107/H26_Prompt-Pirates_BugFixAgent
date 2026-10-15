@@ -40,13 +40,15 @@
           </p>
 
           <!-- Repository input (visual only, no functionality yet) -->
-          <form class="repo-form" onsubmit="return false;">
-            <label for="repo-url" class="repo-form__label">GitHub repository URL</label>
-            <div class="repo-form__row">
-              <input id="repo-url" type="text" placeholder="https://github.com/owner/repository">
-              <button type="button" class="btn btn--primary">Analyze Repository</button>
-            </div>
-          </form>
+          <form class="repo-form" id="repo-form" novalidate>
+  <label for="repo-url" class="repo-form__label">GitHub repository URL</label>
+  <div class="repo-form__row">
+    <input id="repo-url" type="text" placeholder="https://github.com/owner/repository">
+    <button type="submit" id="analyze-btn" class="btn btn--primary">Analyze Repository</button>
+  </div>
+  <p id="repo-msg" class="form-msg" role="status"></p>
+</form>
+<p class="stat__value stat__value--text" id="repo-name">acme/inventory-api</p>
         </div>
 
         <!-- Decorative code-diff preview (sample data) -->
@@ -214,6 +216,6 @@
       <p>BugFix Agent &middot; Hackathon prototype &middot; All data shown is sample data.</p>
     </div>
   </footer>
-
+<script src="script.js" defer></script>
 </body>
 </html>

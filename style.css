@@ -253,3 +253,7 @@ code {
   .report { flex-direction: column; align-items: stretch; text-align: left; }
   .btn { width: 100%; }
 }
+/* ---------- 13. Form messages and disabled state ---------- */
+.form-msg { min-height: 1.5em; margin-top: 10px; font-size: 0.9rem; color: var(--muted); }
+.form-msg--error { color: var(--critical); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
