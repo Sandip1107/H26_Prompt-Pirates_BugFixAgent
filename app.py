@@ -84,14 +84,22 @@ def gh_headers():
 
 
 def gh_get(url, **kw):
+    """GET from GitHub with clear, specific error messages."""
     try:
         r = requests.get(url, headers=gh_headers(), timeout=20, **kw)
     except requests.RequestException as e:
         raise ApiError(f"Could not reach GitHub: {e.__class__.__name__}", 502)
     if r.status_code == 404:
         raise ApiError("Repository not found (it may be private or the URL is wrong).", 404)
+    if r.status_code == 401:
+        raise ApiError("GitHub rejected GITHUB_TOKEN. Check that it was copied correctly and has not expired.", 401)
     if r.status_code in (403, 429):
-        raise ApiError("GitHub API rate limit reached. Wait a while or set GITHUB_TOKEN.", 429)
+        if r.status_code == 429 or r.headers.get("X-RateLimit-Remaining") == "0":
+            reset = r.headers.get("X-RateLimit-Reset", "")
+            when = datetime.fromtimestamp(int(reset)).strftime("%H:%M") if reset.isdigit() else "later"
+            hint = "The token's hourly limit is used up." if GITHUB_TOKEN else "Set GITHUB_TOKEN to raise the limit."
+            raise ApiError(f"GitHub API rate limit reached; it resets around {when}. {hint}", 429)
+        raise ApiError("GitHub refused the request (HTTP 403). The repository may be restricted.", 403)
     if not r.ok:
         raise ApiError(f"GitHub returned HTTP {r.status_code}.", 502)
     return r
@@ -225,6 +233,11 @@ def call_ai(messages):
         raise ApiError(f"AI endpoint unreachable: {e.__class__.__name__}", 502)
     if r.status_code in (401, 403):
         raise ApiError("AI credentials were rejected. Check HF_TOKEN / AI_API_KEY.", 502)
+    if r.status_code == 402:
+        raise ApiError("AI usage credits are exhausted for this token. Add credits, use another token, "
+                       "or run a local open-weight model by setting AI_BASE_URL and AI_MODEL.", 502)
+    if r.status_code == 429:
+        raise ApiError("AI rate limit reached. Wait a minute and try again, or use a different token or model.", 502)
     if not r.ok:
         raise ApiError(f"AI endpoint returned HTTP {r.status_code}.", 502)
     try:
