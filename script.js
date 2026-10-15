@@ -54,12 +54,10 @@ async function loadStatus() {
     const ai = $("#ai-status"), sb = $("#sandbox-status");
     ai.textContent = s.ai.configured ? `AI: ${s.ai.model}` : "AI: not configured";
     ai.className = "pill " + (s.ai.configured ? "ok" : "off");
+    ai.title = s.ai.message || "";
     sb.textContent = s.sandbox.available ? "Sandbox: Docker ready" : "Sandbox: unavailable";
     sb.className = "pill " + (s.sandbox.available ? "ok" : "off");
     sb.title = s.sandbox.message || "";
-    const notice = $("#ai-notice");
-    notice.hidden = s.ai.configured;
-    notice.textContent = s.ai.message || "";
   } catch (e) {
     $("#ai-status").textContent = "Server offline";
   }
