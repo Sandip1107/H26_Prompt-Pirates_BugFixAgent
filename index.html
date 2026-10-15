@@ -39,16 +39,15 @@
             being guesswork.
           </p>
 
-          <!-- Repository input (visual only, no functionality yet) -->
+          <!-- Repository input: handled by script.js -->
           <form class="repo-form" id="repo-form" novalidate>
-  <label for="repo-url" class="repo-form__label">GitHub repository URL</label>
-  <div class="repo-form__row">
-    <input id="repo-url" type="text" placeholder="https://github.com/owner/repository">
-    <button type="submit" id="analyze-btn" class="btn btn--primary">Analyze Repository</button>
-  </div>
-  <p id="repo-msg" class="form-msg" role="status"></p>
-</form>
-<p class="stat__value stat__value--text" id="repo-name">acme/inventory-api</p>
+            <label for="repo-url" class="repo-form__label">GitHub repository URL</label>
+            <div class="repo-form__row">
+              <input id="repo-url" type="text" placeholder="https://github.com/owner/repository">
+              <button type="submit" id="analyze-btn" class="btn btn--primary">Analyze Repository</button>
+            </div>
+            <p id="repo-msg" class="form-msg" role="status"></p>
+          </form>
         </div>
 
         <!-- Decorative code-diff preview (sample data) -->
@@ -76,18 +75,18 @@
         <div class="grid grid--3">
           <article class="card stat">
             <p class="stat__label">Repository</p>
-            <p class="stat__value stat__value--text">acme/inventory-api</p>
+            <p class="stat__value stat__value--text" id="repo-name">acme/inventory-api</p>
             <p class="stat__note">Python, 3 contributors</p>
           </article>
           <article class="card stat">
             <p class="stat__label">Files scanned</p>
-            <p class="stat__value">128</p>
-            <p class="stat__note">of 131 files in the repository</p>
+            <p class="stat__value" id="files-scanned">128</p>
+            <p class="stat__note" id="files-note">of 131 files in the repository</p>
           </article>
           <article class="card stat">
             <p class="stat__label">Issues found</p>
-            <p class="stat__value stat__value--warn">7</p>
-            <p class="stat__note">1 critical, 2 high, 4 medium</p>
+            <p class="stat__value stat__value--warn" id="issues-found">7</p>
+            <p class="stat__note" id="issues-note">1 critical, 2 high, 4 medium</p>
           </article>
         </div>
       </div>
@@ -100,7 +99,8 @@
           <h2>Bug findings</h2>
           <span class="badge badge--sample">Sample data</span>
         </div>
-        <div class="grid grid--3">
+        <!-- script.js replaces these sample cards after a scan -->
+        <div class="grid grid--3" id="findings-grid">
 
           <article class="card bug bug--critical">
             <div class="bug__top">
@@ -202,8 +202,7 @@
             <h2>Dependency Exit Capsule</h2>
             <p>A single report with findings, fixes, and verification results, ready to share with your team.</p>
           </div>
-          <!-- Visual only for now -->
-          <button type="button" class="btn btn--primary">Download Report</button>
+          <button type="button" id="download-btn" class="btn btn--primary">Download Report</button>
         </div>
       </div>
     </section>
@@ -216,6 +215,7 @@
       <p>BugFix Agent &middot; Hackathon prototype &middot; All data shown is sample data.</p>
     </div>
   </footer>
-<script src="script.js" defer></script>
+
+  <script src="script.js" defer></script>
 </body>
 </html>
