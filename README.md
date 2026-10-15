@@ -45,6 +45,8 @@ BugFix Agent aims to simplify this process using repository analysis, AI-powered
 
 ##  Hackathon Track
 **Track 2 — Maintenance Agent Skill**
-
-## 👥 Team
-Add your team name and members here.
+Prompt Pirates:
+1.Sandip Sawant
+2.Nishad Varkute 
+3.Vedanta Sahoo
+4.Pratik Thakur
