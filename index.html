@@ -3,67 +3,78 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BugFix Agent | Find Bugs. Fix Smarter.</title>
-  <!-- All styling lives in style.css (same folder as this file) -->
-  <link rel="stylesheet" href="style.css">
+  <title>BugFix Agent</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-
-  <!-- ============ NAVBAR ============ -->
-  <header class="navbar">
-    <div class="container navbar__inner">
-      <a href="#top" class="logo" aria-label="BugFix Agent home">
-        <span class="logo__mark" aria-hidden="true">&lt;/&gt;</span>
-        <span class="logo__text">BugFix Agent</span>
-      </a>
-      <nav class="nav-links" aria-label="Main navigation">
-        <a href="#analyze">Analyze</a>
-        <a href="#findings">Findings</a>
-        <a href="#recommendations">Recommendations</a>
-        <a href="#verification">Verification</a>
-        <a href="#report">Report</a>
-      </nav>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">BF</span>
+      <div>
+        <h1>BugFix Agent</h1>
+        <p>Track 2 &middot; Maintenance Agent Skill</p>
+      </div>
+    </div>
+    <div class="status-group" aria-live="polite">
+      <span class="pill" id="ai-status">AI: checking&hellip;</span>
+      <span class="pill" id="sandbox-status">Sandbox: checking&hellip;</span>
     </div>
   </header>
 
-  <main id="top">
-
-    <!-- ============ HERO + REPOSITORY INPUT ============ -->
-    <section class="hero" id="analyze">
-      <div class="container hero__inner">
-        <div class="hero__copy">
-          <h1>Find Bugs. Fix Smarter.</h1>
-          <p class="hero__lead">
-            BugFix Agent scans your GitHub repository, points out risky code,
-            suggests fixes, and checks them with tests, so maintenance stops
-            being guesswork.
-          </p>
-
-          <!-- Repository input (visual only, no functionality yet) -->
-          <form class="repo-form" onsubmit="return false;">
-            <label for="repo-url" class="repo-form__label">GitHub repository URL</label>
-            <div class="repo-form__row">
-              <input id="repo-url" type="text" placeholder="https://github.com/owner/repository">
-              <button type="button" class="btn btn--primary">Analyze Repository</button>
-            </div>
-          </form>
-        </div>
-
-        <!-- Decorative code-diff preview (sample data) -->
-        <div class="diff" aria-hidden="true">
-          <div class="diff__bar">
-            <span class="dot dot--red"></span><span class="dot dot--amber"></span><span class="dot dot--green"></span>
-            <span class="diff__file">utils/auth.py</span>
-          </div>
-          <pre class="diff__code"><span class="ln">41</span>  def get_user(user_id):
-<span class="ln del">42</span>-     query = "SELECT * FROM users WHERE id=" + user_id
-<span class="ln add">42</span>+     query = "SELECT * FROM users WHERE id = %s"
-<span class="ln add">43</span>+     cursor.execute(query, (user_id,))
-<span class="ln">44</span>      return cursor.fetchone()</pre>
-        </div>
-      </div>
+  <main class="container">
+    <section class="panel intro">
+      <h2>Analyze a public repository</h2>
+      <p class="muted">Scans Python, JavaScript and TypeScript files, lists findings with evidence, and can ask an open-weight model for fix proposals. Your repository is never modified.</p>
+      <form id="analyze-form" class="url-form">
+        <label class="sr-only" for="repo-url">GitHub repository URL</label>
+        <input id="repo-url" type="url" placeholder="https://github.com/owner/repo" autocomplete="off" required>
+        <button type="submit" id="analyze-btn" class="btn primary">Analyze</button>
+      </form>
+      <p id="ai-notice" class="notice" hidden></p>
     </section>
 
-    <!-- ============ REPOSITORY OVERVIEW ============ -->
-    <section class="section" id="overview">
-      <div class="container">
+    <section id="state-box" class="state-box" hidden role="status"></section>
+
+    <div id="results" hidden>
+      <section class="panel" id="repo-card"></section>
+
+      <div class="layout">
+        <section class="findings-col">
+          <div class="toolbar">
+            <div id="severity-filters" class="chips" role="group" aria-label="Filter by severity"></div>
+            <input id="search" type="search" placeholder="Filter by file or title">
+          </div>
+          <div id="findings-list"></div>
+        </section>
+
+        <aside class="side-col">
+          <section class="panel">
+            <h3>Verification</h3>
+            <p class="muted small">Runs detected tests in a Docker container with the network disabled. Accepted AI fixes are applied only to a temporary copy.</p>
+            <button id="verify-btn" class="btn">Run tests</button>
+            <div id="verify-output"></div>
+          </section>
+
+          <section class="panel">
+            <h3>Dependency Exit Capsule</h3>
+            <p class="muted small">Downloads reflect the current analysis, AI recommendations, your decisions and any executed tests.</p>
+            <div class="btn-row">
+              <a id="dl-md" class="btn" href="#" download>Markdown</a>
+              <a id="dl-json" class="btn" href="#" download>JSON</a>
+            </div>
+          </section>
+
+          <section class="panel legend">
+            <h3>How to read this</h3>
+            <p><span class="tag tag-evidence">Evidence</span> Observed by static analysis in the fetched code.</p>
+            <p><span class="tag tag-ai">AI</span> Model suggestion. Unverified until tests are run.</p>
+            <p><span class="tag tag-test">Test</span> Output from tests that actually executed.</p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <script src="/script.js"></script>
+</body>
+</html>
